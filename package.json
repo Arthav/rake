@@ -1,0 +1,49 @@
+{
+  "name": "agent-rake",
+  "version": "0.1.0",
+  "description": "Zero-dependency CLI that rakes a repository into an agent-ready brief.",
+  "type": "module",
+  "bin": {
+    "agent-rake": "./bin/agent-rake.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "start": "node ./bin/agent-rake.js",
+    "brief": "node ./bin/agent-rake.js",
+    "brief:check": "node ./bin/agent-rake.js --check",
+    "test": "node --test",
+    "smoke": "node ./bin/agent-rake.js --no-write --root .",
+    "prepublishOnly": "npm test && npm run smoke"
+  },
+  "keywords": [
+    "agents",
+    "agents.md",
+    "codex",
+    "claude-code",
+    "cursor",
+    "developer-tools",
+    "repo-context",
+    "cli",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-name/agent-rake.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-name/agent-rake/issues"
+  },
+  "homepage": "https://github.com/your-name/agent-rake#readme"
+}
