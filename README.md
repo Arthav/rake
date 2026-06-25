@@ -1,79 +1,130 @@
 # agent-rake
 
-Zero-dependency CLI that turns any repository into an agent-ready brief.
+[![CI](https://github.com/Arthav/rake/actions/workflows/ci.yml/badge.svg)](https://github.com/Arthav/rake/actions/workflows/ci.yml)
+![Node >=18](https://img.shields.io/badge/node-%3E%3D18-339933)
+![Runtime dependencies: 0](https://img.shields.io/badge/runtime_dependencies-0-111827)
+![Network: none](https://img.shields.io/badge/network-none-2563eb)
 
-Most repo context files are either missing, stale, or too long. `agent-rake` scans the actual files in a project and writes a compact `AGENT_BRIEF.md` with the things coding agents need first: manifests, package manager, runnable scripts, entrypoints, routes, tests, env examples, CI, config files, and risk hotspots.
+**Rake any repository into an agent-ready brief before your AI coding agent touches it.**
 
-No API key. No model call. No telemetry. Just a fast local scan.
+`agent-rake` is a zero-dependency Node CLI that scans a repo and generates a compact
+`AGENT_BRIEF.md`: the commands, entrypoints, tests, config, docs, CI, env examples,
+and risky files an agent should inspect first.
 
-## Why this should exist
-
-AI coding agents are now normal in real repositories, but they waste time when they do not know where the app starts, which command is real, or which files are risky. The best open-source idea here is not another agent. It is the boring missing layer before the agent starts: a trustworthy repo brief generated from source.
-
-## Install
-
-```bash
-npm install -g agent-rake
-```
-
-Or run without installing:
+No API key. No model call. No telemetry. No hidden network request.
 
 ```bash
 npx agent-rake
 ```
 
-## Usage
+## Why This Exists
 
-Create `AGENT_BRIEF.md` in the current repo:
+AI coding agents are powerful, but they still burn context rediscovering the same
+repo facts: where the app starts, which test command is real, whether there is an
+`AGENTS.md`, where routes live, and which files look security-sensitive.
+
+That is waste.
+
+`agent-rake` gives every agent run a source-derived map first. The output is short
+enough to paste into a context window, deterministic enough to commit, and boring
+enough to trust in CI.
+
+## Why This Is Worth A Star
+
+- **It makes agent sessions start smarter.** Run it before Codex, Claude Code,
+  Cursor, Copilot, or your own automation.
+- **It is local-only by design.** Repo structure is scanned on your machine; nothing
+  is uploaded.
+- **It is dependency-free.** No install tree, no framework lock-in, no runtime bloat.
+- **It is conservative.** It prefers obvious source signals over clever guesses.
+- **It is CI-friendly.** `--check` fails when the committed brief is missing or stale.
+- **It is integration-friendly.** `--json` gives power users and scripts structured
+  scan output.
+
+## Quick Start
+
+Create `AGENT_BRIEF.md` in the current repository:
+
+```bash
+npx agent-rake
+```
+
+Install globally if you want it everywhere:
+
+```bash
+npm install -g agent-rake
+agent-rake
+```
+
+Run from this checkout:
+
+```bash
+node ./bin/agent-rake.js --help
+npm run smoke
+```
+
+## Common Workflows
+
+Generate the default brief:
 
 ```bash
 agent-rake
 ```
 
-Check that the committed brief is current:
+Check whether the committed brief is current:
 
 ```bash
 agent-rake --check
 ```
 
-Scan another repo:
+Scan another repository:
 
 ```bash
 agent-rake ../my-app
 ```
 
-Print instead of writing:
+Print Markdown instead of writing a file:
 
 ```bash
 agent-rake --no-write
 ```
 
-Write directly to an agent instruction file:
+Write to a custom output file:
 
 ```bash
 agent-rake --out AGENTS.md
 ```
 
-Get structured JSON:
+Use JSON for scripts, dashboards, or custom agent launchers:
 
 ```bash
 agent-rake --json
 ```
 
-## What it detects
+Cap scan size for very large repos:
 
-- Project manifests like `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pubspec.yaml`, and `composer.json`
-- Lockfiles and likely package manager
-- Package scripts and common test commands
-- Entrypoints such as `src/index.ts`, `server.js`, `main.py`, `main.go`, and Next.js app files
-- Route/API files and controllers
-- Test files
-- Env template files such as `.env.example`, while intentionally skipping secret-looking `.env` files
-- CI and Docker files
-- Config files
-- Risk hotspots around auth, permissions, payments, webhooks, migrations, schemas, queues, cron jobs, secrets, and tokens
+```bash
+agent-rake --max-files 1000
+```
 
-## Example output
+## What Agents Get
+
+The generated brief gives an agent the facts it usually needs before editing:
+
+- repo snapshot and primary languages
+- detected package manager
+- manifests, lockfiles, docs, and existing agent instruction files
+- preferred commands from package scripts and ecosystem signals
+- entrypoints
+- route/API/controller files
+- test files
+- safe env templates, while skipping secret-looking `.env` files
+- CI, Docker, and config files
+- risk hotspots such as auth, permissions, payments, webhooks, migrations,
+  schemas, queues, cron jobs, secrets, and tokens
+- repo-specific rules for cautious agent behavior
+
+Example output:
 
 ```markdown
 # Agent Brief
@@ -93,19 +144,64 @@ Generated by agent-rake for `my-app`.
 - `pnpm build` - package.json script: next build
 ```
 
-## Launch positioning
+## CLI Reference
 
-The pitch is simple:
+| Command | Purpose |
+| --- | --- |
+| `agent-rake` | Generate `AGENT_BRIEF.md` in the current repo. |
+| `agent-rake <path>` | Scan another repo. |
+| `agent-rake --check` | Fail if the output file is missing or stale. |
+| `agent-rake --no-write` | Print Markdown to stdout. |
+| `agent-rake --json` | Print the scan result as structured JSON. |
+| `agent-rake --out <file>` | Write to a custom file, such as `AGENTS.md`. |
+| `agent-rake --max-files <n>` | Limit how many files are scanned. |
+| `agent-rake --quiet` | Suppress success output when writing. |
+| `agent-rake --version` | Print the package version. |
+| `agent-rake --help` | Print help. |
 
-> Stop making coding agents rediscover your repo. Generate the brief first.
+## Power-User Patterns
 
-Good first distribution targets:
+Use it as a preflight before opening an agent session:
 
-- GitHub README demo GIF
-- Hacker News "Show HN"
-- r/LocalLLaMA and AI coding communities
-- Cursor, Claude Code, Codex, and Copilot users who keep rewriting repo instructions
-- Template repos that want a generated `AGENTS.md`
+```bash
+agent-rake --no-write
+```
+
+Commit the brief and enforce freshness in CI:
+
+```bash
+agent-rake
+agent-rake --check
+```
+
+Pipe JSON into your own launcher:
+
+```bash
+agent-rake --json > repo-context.json
+```
+
+Seed a repo-specific `AGENTS.md`:
+
+```bash
+agent-rake --out AGENTS.md
+```
+
+## Trust Model
+
+`agent-rake` is intentionally small:
+
+- zero runtime dependencies
+- Node.js standard library only
+- no network calls
+- no telemetry
+- no model provider
+- no broad source-content ingestion during normal scans
+- deterministic Markdown output for review and CI
+- conservative detection over magical inference
+
+The scanner reads bounded manifest data where needed, such as `package.json`, and
+otherwise works from file paths, names, and sizes. Secret-looking `.env` files are
+detected for warnings but not listed as context files.
 
 ## Development
 
@@ -115,14 +211,13 @@ npm run smoke
 npm run brief:check
 ```
 
-## Design constraints
+The project has no runtime dependencies. Keep it that way unless a feature is
+impossible without one.
 
-- Zero runtime dependencies
-- Local-only scan
-- Conservative inference
-- Deterministic Markdown that can be committed and checked in CI
-- Useful Markdown by default
-- JSON output for integrations
+## Roadmap
+
+Near-term work is focused on sharper framework detection, better monorepo signals,
+agent-specific output targets, and launch-quality examples. See [ROADMAP.md](./ROADMAP.md).
 
 ## License
 

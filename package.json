@@ -40,10 +40,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-name/agent-rake.git"
+    "url": "git+https://github.com/Arthav/rake.git"
   },
   "bugs": {
-    "url": "https://github.com/your-name/agent-rake/issues"
+    "url": "https://github.com/Arthav/rake/issues"
   },
-  "homepage": "https://github.com/your-name/agent-rake#readme"
+  "homepage": "https://github.com/Arthav/rake#readme"
 }
