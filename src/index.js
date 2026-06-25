@@ -324,6 +324,7 @@ export function scanRepository(root = process.cwd(), options = {}) {
     generatedAt: new Date().toISOString(),
     root: path.basename(absoluteRoot),
     absoluteRoot,
+    displayRoot: path.basename(absoluteRoot),
     filesScanned: files.length,
     truncated: walkResult.truncated,
     ignoredDirectories: Array.from(IGNORED_DIRS).sort(),
@@ -354,7 +355,7 @@ export function renderMarkdown(scan) {
   lines.push("");
   lines.push("## Repo Snapshot");
   lines.push("");
-  lines.push(`- Root: \`${scan.absoluteRoot}\``);
+  lines.push(`- Root: \`${scan.displayRoot ?? scan.root}\``);
   lines.push(`- Files scanned: ${scan.filesScanned}${scan.truncated ? " (truncated by --max-files)" : ""}`);
   lines.push(`- Primary languages: ${formatLanguageSummary(scan.languages)}`);
   lines.push(`- Package manager: ${scan.packageManager || "not detected"}`);
