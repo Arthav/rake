@@ -14,15 +14,19 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "RELEASE.md"
   ],
   "scripts": {
     "start": "node ./bin/agent-rake.js",
     "brief": "node ./bin/agent-rake.js",
     "brief:check": "node ./bin/agent-rake.js --check",
     "test": "node --test",
-    "smoke": "node ./bin/agent-rake.js --no-write --root .",
-    "prepublishOnly": "npm test && npm run smoke"
+    "smoke": "node ./bin/agent-rake.js --dry-run --root .",
+    "smoke:modes": "node ./bin/agent-rake.js --summary --strict --ignore .npm-cache --root . && node ./bin/agent-rake.js --doctor --strict --root . && node ./bin/agent-rake.js --targets && node ./bin/agent-rake.js --completion bash && node ./bin/agent-rake.js --completion powershell && node ./bin/agent-rake.js --github-actions && node ./bin/agent-rake.js --config-example && node ./bin/agent-rake.js --show-config --root . && node ./bin/agent-rake.js --diff --root .",
+    "pack:check": "npm pack --dry-run --cache .npm-cache",
+    "release:check": "npm test && npm run smoke && npm run smoke:modes && npm run brief:check && npm run pack:check",
+    "prepublishOnly": "npm run release:check"
   },
   "keywords": [
     "agents",
@@ -35,7 +39,6 @@
     "cli",
     "ai"
   ],
-  "author": "",
   "license": "MIT",
   "engines": {
     "node": ">=18"

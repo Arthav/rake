@@ -7,9 +7,22 @@ Thanks for improving `agent-rake`.
 ```bash
 npm test
 npm run smoke
+npm run release:check
 ```
 
 No install step is required because the project has no dependencies.
+
+## Reports and requests
+
+Use the GitHub issue forms when possible. Good bug reports include:
+
+- `agent-rake --version`
+- the exact command that failed or produced surprising output
+- a small repo tree or relevant manifest snippets
+- the actual brief section or JSON field
+- the expected output
+
+Remove secrets, tokens, private URLs, and sensitive `.env` values before posting.
 
 ## Pull request rules
 
@@ -22,5 +35,5 @@ No install step is required because the project has no dependencies.
 
 - Add better manifest detection for another ecosystem.
 - Improve route detection for a framework.
-- Add a `--format compact` mode.
-- Add a `--fail-on-warning` option for CI.
+- Add another conservative agent output target.
+- Add a focused example for another common repo shape.

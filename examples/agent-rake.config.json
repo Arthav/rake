@@ -1,0 +1,8 @@
+{
+  "ignore": [
+    "fixtures",
+    "src/generated"
+  ],
+  "maxFiles": 3000,
+  "output": "AGENT_BRIEF.md"
+}
