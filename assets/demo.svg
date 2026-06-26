@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520" role="img" aria-labelledby="title desc">
+  <title id="title">agent-rake terminal demo</title>
+  <desc id="desc">A terminal showing agent-rake generating an agent brief, checking it, and printing the most useful repo signals.</desc>
+  <rect width="980" height="520" rx="18" fill="#0f172a"/>
+  <rect x="1" y="1" width="978" height="518" rx="17" fill="none" stroke="#24324a"/>
+  <circle cx="38" cy="34" r="7" fill="#f87171"/>
+  <circle cx="62" cy="34" r="7" fill="#fbbf24"/>
+  <circle cx="86" cy="34" r="7" fill="#34d399"/>
+  <text x="126" y="40" fill="#94a3b8" font-family="Consolas, Menlo, monospace" font-size="15">agent-rake demo</text>
+  <g font-family="Consolas, Menlo, monospace" font-size="17">
+    <text x="34" y="86" fill="#38bdf8">$ npx agent-rake --target agents</text>
+    <text x="34" y="118" fill="#e2e8f0">Wrote AGENTS.md</text>
+    <text x="34" y="164" fill="#38bdf8">$ npx agent-rake --check</text>
+    <text x="34" y="196" fill="#e2e8f0">AGENT_BRIEF.md is current.</text>
+    <text x="34" y="242" fill="#38bdf8">$ npx agent-rake --no-write</text>
+    <text x="34" y="282" fill="#f8fafc"># Agent Brief</text>
+    <text x="34" y="322" fill="#cbd5e1">- Framework signals: `Next.js`, `React`</text>
+    <text x="34" y="354" fill="#cbd5e1">- Workspace signals: `pnpm workspace`, `Turborepo`</text>
+    <text x="34" y="386" fill="#cbd5e1">- Routes and APIs: `app/api/health/route.ts`</text>
+    <text x="34" y="418" fill="#cbd5e1">- Data and schema files: `prisma/schema.prisma`</text>
+    <text x="34" y="450" fill="#cbd5e1">- Commands agents should prefer: `pnpm test`, `pnpm build`</text>
+  </g>
+</svg>
+

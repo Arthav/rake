@@ -15,7 +15,7 @@ The project should win by being:
 
 ## v0.2 - Trust And CI
 
-Status: in progress
+Status: complete
 
 - Add deterministic Markdown output.
 - Add `--check` to fail when the committed brief is missing or stale.
@@ -25,16 +25,25 @@ Status: in progress
 
 ## v0.3 - Better Framework Signals
 
-Status: planned
+Status: in progress
 
-- Detect monorepo workspaces for npm, pnpm, yarn, Cargo, Go, and Dart.
-- Improve route detection for Next.js, Remix, Express, FastAPI, Django, Rails, Laravel, Phoenix, and Hono.
-- Detect database/schema tools more accurately: Prisma, Drizzle, Django migrations, Rails migrations, Alembic, Laravel migrations.
-- Add bounded content peeks for manifest files only, keeping normal source scanning metadata-only.
+- Add first-pass framework/runtime signals from `package.json`, `composer.json`,
+  bounded manifest peeks, and conservative route conventions.
+- Detect monorepo/workspace signals for JavaScript workspaces, pnpm, Turborepo,
+  Nx, Lerna, Cargo, Go, Melos, and Dart pub workspaces.
+- Improve route detection for Next.js, Remix, SvelteKit, Django, Rails, Laravel,
+  and Phoenix.
+- Add first-class data/schema/migration file detection for Prisma, Drizzle,
+  Django-style migrations, Rails migrations, Alembic, Laravel migrations, and
+  common SQL schema files.
+- Add bounded backend route declaration peeks for likely Express, FastAPI, Hono,
+  and Flask entrypoint files.
+- Keep source peeks bounded, conservative, and limited to route-declaration
+  candidates; keep normal source scanning metadata-only.
 
 ## v0.4 - Agent Targets
 
-Status: planned
+Status: complete
 
 - Add `--target agents` for `AGENTS.md`.
 - Add `--target claude` for `CLAUDE.md`.
@@ -44,11 +53,11 @@ Status: planned
 
 ## v0.5 - Launch Quality
 
-Status: planned
+Status: in progress
 
-- Record terminal demo GIF.
+- Add a lightweight terminal demo artifact for the README.
 - Add examples for a Next.js app, Python API, Go service, and monorepo.
-- Add issue templates.
+- Add issue templates for bug reports and feature requests.
 - Replace placeholder GitHub URLs after the repository is published.
 - Publish to npm after the package name is confirmed available.
 
@@ -64,5 +73,6 @@ Status: planned
 
 - The package metadata still uses placeholder GitHub URLs.
 - There is no real Git remote in this workspace.
-- Framework detection is useful but still shallow.
-- The project needs a demo artifact before public launch.
+- Backend route detection now covers common entrypoint declarations, but it still
+  intentionally skips arbitrary large files and unusual route builder patterns.
+- The project still needs release metadata cleanup before public launch.

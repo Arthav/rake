@@ -1,0 +1,78 @@
+name: Bug report
+description: Report incorrect output, a CLI failure, or stale-check behavior.
+title: "Bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a sharp edge. Good reports include the command you ran, the relevant repo shape, and the brief output that looked wrong.
+  - type: input
+    id: version
+    attributes:
+      label: agent-rake version
+      description: Run `agent-rake --version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste the exact command you ran.
+      placeholder: "agent-rake --root ./my-app --target agents"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - framework detection
+        - workspace detection
+        - route/API detection
+        - data/schema detection
+        - env/privacy handling
+        - commands/scripts
+        - --check or deterministic output
+        - --target output
+        - JSON output
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: repo-shape
+    attributes:
+      label: Relevant repo shape
+      description: Paste a small file tree or the relevant manifests. Do not paste secrets.
+      placeholder: |
+        package.json
+        app/api/health/route.ts
+        prisma/schema.prisma
+        .env.example
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: Paste the incorrect brief section, JSON field, or error.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: Describe what agent-rake should have shown instead.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed secrets, tokens, private URLs, and sensitive `.env` values from this report.
+          required: true
+

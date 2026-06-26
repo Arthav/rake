@@ -7,8 +7,10 @@
     "agent-rake": "./bin/agent-rake.js"
   },
   "files": [
+    "assets",
     "bin",
     "src",
+    "examples",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",

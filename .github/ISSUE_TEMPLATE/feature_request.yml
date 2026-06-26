@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest a detection improvement, output format, target, or workflow.
+title: "Feature: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The best feature requests explain the agent workflow this unlocks and the conservative source signal agent-rake can use.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - framework detection
+        - workspace detection
+        - route/API detection
+        - data/schema detection
+        - command inference
+        - agent target output
+        - JSON output
+        - docs/examples
+        - release/package quality
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Agent workflow
+      description: What should an agent be able to do faster or more safely because of this?
+      placeholder: "Before editing a Rails app, the brief should point agents to config/routes.rb and db/migrate."
+    validations:
+      required: true
+  - type: textarea
+    id: source-signal
+    attributes:
+      label: Conservative source signal
+      description: What file path, manifest dependency, script name, or small bounded content pattern should agent-rake use?
+      placeholder: "Gemfile contains gem 'rails', config/routes.rb exists, db/migrate/*.rb exists."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-output
+    attributes:
+      label: Proposed brief output
+      description: Show the Markdown or JSON shape you expect.
+      render: markdown
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
+      options:
+        - label: This can work with zero runtime dependencies.
+          required: true
+        - label: This does not require network calls, telemetry, or model calls.
+          required: true
+        - label: This does not require broad source-content ingestion.
+          required: true
+

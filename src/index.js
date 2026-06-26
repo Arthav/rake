@@ -7,6 +7,14 @@ export const DEFAULT_OUTPUT = "AGENT_BRIEF.md";
 
 const DEFAULT_MAX_FILES = 3000;
 const MAX_TEXT_BYTES = 1024 * 1024;
+const MAX_ROUTE_HINT_BYTES = 128 * 1024;
+const TARGET_OUTPUTS = new Map([
+  ["agents", "AGENTS.md"],
+  ["claude", "CLAUDE.md"],
+  ["codex", "CODEX.md"],
+  ["copilot", ".github/copilot-instructions.md"],
+  ["cursor", ".cursor/rules/agent-rake.mdc"]
+]);
 
 const IGNORED_DIRS = new Set([
   ".cache",
@@ -144,6 +152,7 @@ export function parseArgs(argv) {
   };
 
   const positionals = [];
+  let outputWasSet = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -182,17 +191,31 @@ export function parseArgs(argv) {
 
     if (arg === "--out" || arg === "--output") {
       options.output = requireValue(argv, index, arg);
+      outputWasSet = true;
       index += 1;
       continue;
     }
 
     if (arg.startsWith("--out=")) {
       options.output = arg.slice("--out=".length);
+      outputWasSet = true;
       continue;
     }
 
     if (arg.startsWith("--output=")) {
       options.output = arg.slice("--output=".length);
+      outputWasSet = true;
+      continue;
+    }
+
+    if (arg === "--target") {
+      options.target = parseTarget(requireValue(argv, index, arg), arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--target=")) {
+      options.target = parseTarget(arg.slice("--target=".length), "--target");
       continue;
     }
 
@@ -233,6 +256,14 @@ export function parseArgs(argv) {
     options.root = positionals[0];
   }
 
+  if (options.target && outputWasSet) {
+    throw new Error("--target cannot be used with --out or --output");
+  }
+
+  if (options.target) {
+    options.output = TARGET_OUTPUTS.get(options.target);
+  }
+
   return options;
 }
 
@@ -253,6 +284,10 @@ export async function runCli(argv = process.argv.slice(2), io = process) {
     throw new Error("--check cannot be used with --json");
   }
 
+  if (options.target && options.json) {
+    throw new Error("--target cannot be used with --json");
+  }
+
   const scan = scanRepository(options.root, options);
 
   if (options.json) {
@@ -267,7 +302,7 @@ export async function runCli(argv = process.argv.slice(2), io = process) {
     const result = compareOutput(markdown, outputPath);
 
     if (!result.ok) {
-      io.stderr.write(`${formatDisplayPath(outputPath)} is ${result.reason}. Run \`agent-rake --out ${options.output}\` to update it.\n`);
+      io.stderr.write(`${formatDisplayPath(outputPath)} is ${result.reason}. Run \`${formatUpdateCommand(options)}\` to update it.\n`);
       io.exitCode = 1;
       return;
     }
@@ -280,6 +315,7 @@ export async function runCli(argv = process.argv.slice(2), io = process) {
   }
 
   if (options.write) {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, markdown, "utf8");
 
     if (!options.quiet) {
@@ -305,7 +341,8 @@ export function scanRepository(root = process.cwd(), options = {}) {
     throw new Error(`root is not a directory: ${absoluteRoot}`);
   }
 
-  const walkResult = walkFiles(absoluteRoot, { maxFiles });
+  const generatedFiles = collectGeneratedOutputFiles(absoluteRoot, options.output);
+  const walkResult = walkFiles(absoluteRoot, { maxFiles, generatedFiles });
   const files = walkResult.files;
   const byPath = new Map(files.map((file) => [file.relative, file]));
 
@@ -315,6 +352,7 @@ export function scanRepository(root = process.cwd(), options = {}) {
   const instructionFiles = collectAgentInstructions(files);
   const packageJson = readJsonIfPresent(byPath.get("package.json")?.absolute);
   const composerJson = readJsonIfPresent(byPath.get("composer.json")?.absolute);
+  const manifestTexts = readManifestTexts(byPath);
 
   const languageSummary = summarizeLanguages(files);
   const packageManager = detectPackageManager(packageJson, lockFiles);
@@ -330,6 +368,8 @@ export function scanRepository(root = process.cwd(), options = {}) {
     ignoredDirectories: Array.from(IGNORED_DIRS).sort(),
     languages: languageSummary,
     packageManager,
+    frameworks: detectFrameworks({ files, packageJson, composerJson, manifestTexts }),
+    workspaces: detectWorkspaces({ files, packageJson, manifestTexts }),
     manifests,
     lockFiles,
     docs,
@@ -339,6 +379,7 @@ export function scanRepository(root = process.cwd(), options = {}) {
     routeFiles: collectRoutes(files),
     testFiles: collectTests(files),
     envFiles: collectEnvFiles(files),
+    dataFiles: collectDataFiles(files),
     ciFiles: collectCiFiles(files),
     configFiles: collectConfigFiles(files),
     hotspotFiles: collectHotspots(files),
@@ -365,6 +406,8 @@ export function renderMarkdown(scan) {
   lines.push("");
   appendList(lines, "Manifests", scan.manifests);
   appendList(lines, "Lockfiles", scan.lockFiles);
+  appendSignals(lines, "Framework signals", scan.frameworks);
+  appendSignals(lines, "Workspace signals", scan.workspaces);
   appendList(lines, "Docs", scan.docs);
   appendList(lines, "Existing agent instructions", scan.instructionFiles);
   lines.push("");
@@ -386,6 +429,7 @@ export function renderMarkdown(scan) {
   appendList(lines, "Routes and APIs", scan.routeFiles);
   appendList(lines, "Tests", scan.testFiles);
   appendList(lines, "Environment files", scan.envFiles);
+  appendList(lines, "Data and schema files", scan.dataFiles);
   appendList(lines, "CI", scan.ciFiles);
   appendList(lines, "Config", scan.configFiles);
   lines.push("");
@@ -474,7 +518,9 @@ function walkFiles(root, options) {
         continue;
       }
 
-      if (!entry.isFile() || GENERATED_FILE_NAMES.has(entry.name.toLowerCase())) {
+      if (!entry.isFile()
+        || GENERATED_FILE_NAMES.has(entry.name.toLowerCase())
+        || options.generatedFiles?.has(relative.toLowerCase())) {
         continue;
       }
 
@@ -567,6 +613,106 @@ function detectPackageManager(packageJson, lockFiles) {
   if (packageJson) return "npm";
 
   return null;
+}
+
+function detectFrameworks({ files, packageJson, composerJson, manifestTexts }) {
+  const signals = [];
+  const dependencyNames = collectDependencyNames(packageJson, [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies"
+  ]);
+  const composerNames = collectDependencyNames(composerJson, ["require", "require-dev"]);
+
+  addDependencySignal(signals, dependencyNames, "next", "Next.js");
+  addDependencySignal(signals, dependencyNames, "@remix-run/node", "Remix");
+  addDependencySignal(signals, dependencyNames, "@remix-run/react", "Remix");
+  addDependencySignal(signals, dependencyNames, "@sveltejs/kit", "SvelteKit");
+  addDependencySignal(signals, dependencyNames, "nuxt", "Nuxt");
+  addDependencySignal(signals, dependencyNames, "astro", "Astro");
+  addDependencySignal(signals, dependencyNames, "vite", "Vite");
+  addDependencySignal(signals, dependencyNames, "react", "React");
+  addDependencySignal(signals, dependencyNames, "vue", "Vue");
+  addDependencySignal(signals, dependencyNames, "svelte", "Svelte");
+  addDependencySignal(signals, dependencyNames, "express", "Express");
+  addDependencySignal(signals, dependencyNames, "fastify", "Fastify");
+  addDependencySignal(signals, dependencyNames, "hono", "Hono");
+  addDependencySignal(signals, dependencyNames, "@nestjs/core", "NestJS");
+
+  addDependencySignal(signals, composerNames, "laravel/framework", "Laravel", "composer.json requirement");
+  addDependencySignal(signals, composerNames, "symfony/framework-bundle", "Symfony", "composer.json requirement");
+
+  addManifestTextSignal(signals, manifestTexts, ["requirements.txt", "pyproject.toml"], /\bfastapi\b/i, "FastAPI");
+  addManifestTextSignal(signals, manifestTexts, ["requirements.txt", "pyproject.toml"], /\bdjango\b/i, "Django");
+  addManifestTextSignal(signals, manifestTexts, ["requirements.txt", "pyproject.toml"], /\bflask\b/i, "Flask");
+  addManifestTextSignal(signals, manifestTexts, ["Gemfile"], /gem\s+["']rails["']/i, "Rails");
+  addManifestTextSignal(signals, manifestTexts, ["go.mod"], /github\.com\/gin-gonic\/gin\b/i, "Gin");
+  addManifestTextSignal(signals, manifestTexts, ["go.mod"], /github\.com\/go-chi\/chi\b/i, "Chi");
+  addManifestTextSignal(signals, manifestTexts, ["go.mod"], /github\.com\/labstack\/echo\b/i, "Echo");
+  addManifestTextSignal(signals, manifestTexts, ["Cargo.toml"], /^\s*axum\s*=/im, "Axum");
+  addManifestTextSignal(signals, manifestTexts, ["Cargo.toml"], /^\s*actix-web\s*=/im, "Actix Web");
+  addManifestTextSignal(signals, manifestTexts, ["mix.exs"], /{:phoenix,/i, "Phoenix");
+  addManifestTextSignal(signals, manifestTexts, ["pubspec.yaml"], /^\s*flutter\s*:/im, "Flutter");
+
+  addPathSignal(signals, files, "Next.js", (file) => /^app\/(?:.*\/)?(page|layout|route)\.[cm]?[jt]sx?$/i.test(file.relative)
+    || /^pages\/.*\.[cm]?[jt]sx?$/i.test(file.relative));
+  addPathSignal(signals, files, "Remix", (file) => /^app\/routes\/.+\.[cm]?[jt]sx?$/i.test(file.relative));
+  addPathSignal(signals, files, "SvelteKit", (file) => /^src\/routes\/(?:.*\/)?(\+page|\+layout|\+server)\.(svelte|[jt]s)$/i.test(file.relative));
+  addPathSignal(signals, files, "Django", (file) => file.relative === "manage.py" || /(^|\/)(settings|urls)\.py$/i.test(file.relative));
+  addPathSignal(signals, files, "Rails", (file) => file.relative === "config/routes.rb");
+  addPathSignal(signals, files, "Laravel", (file) => file.relative === "artisan" || /^routes\/(api|web|console|channels)\.php$/i.test(file.relative));
+  addPathSignal(signals, files, "Phoenix", (file) => /(^|\/)router\.ex$/i.test(file.relative));
+
+  return uniqueSignals(signals).slice(0, 16);
+}
+
+function detectWorkspaces({ files, packageJson, manifestTexts }) {
+  const signals = [];
+  const fileSet = new Set(files.map((file) => file.relative));
+
+  if (packageJson?.workspaces) {
+    const workspaceText = formatWorkspaceGlobs(packageJson.workspaces);
+    const evidence = workspaceText
+      ? `package.json workspaces: ${workspaceText}`
+      : "package.json workspaces";
+
+    signals.push({ name: "JavaScript workspace", evidence });
+  }
+
+  if (fileSet.has("pnpm-workspace.yaml")) {
+    signals.push({ name: "pnpm workspace", evidence: "pnpm-workspace.yaml" });
+  }
+
+  if (fileSet.has("turbo.json")) {
+    signals.push({ name: "Turborepo", evidence: "turbo.json" });
+  }
+
+  if (fileSet.has("nx.json")) {
+    signals.push({ name: "Nx workspace", evidence: "nx.json" });
+  }
+
+  if (fileSet.has("lerna.json")) {
+    signals.push({ name: "Lerna workspace", evidence: "lerna.json" });
+  }
+
+  if (fileSet.has("go.work")) {
+    signals.push({ name: "Go workspace", evidence: "go.work" });
+  }
+
+  if (/\[workspace\]/i.test(manifestTexts.get("Cargo.toml") ?? "")) {
+    signals.push({ name: "Cargo workspace", evidence: "Cargo.toml [workspace]" });
+  }
+
+  if (fileSet.has("melos.yaml")) {
+    signals.push({ name: "Melos workspace", evidence: "melos.yaml" });
+  }
+
+  if (/^workspace\s*:/im.test(manifestTexts.get("pubspec.yaml") ?? "")) {
+    signals.push({ name: "Dart pub workspace", evidence: "pubspec.yaml workspace" });
+  }
+
+  return uniqueSignals(signals).slice(0, 12);
 }
 
 function inferCommands({ packageJson, composerJson, manifests, lockFiles, packageManager }) {
@@ -678,19 +824,76 @@ function collectEntrypoints(files) {
 }
 
 function collectRoutes(files) {
-  return files
-    .filter((file) => {
-      const lower = file.relative.toLowerCase();
-      return lower.includes("/routes/")
-        || lower.includes("/controllers/")
-        || lower.includes("/api/")
-        || /(^|\/)route\.[cm]?[jt]s$/.test(lower)
-        || /(^|\/)urls\.py$/.test(lower)
-        || /(^|\/)views\.py$/.test(lower);
-    })
-    .map((file) => file.relative)
+  const pathMatches = files
+    .filter(isRoutePathFile)
+    .map((file) => file.relative);
+  const declarationMatches = files
+    .filter(isRouteDeclarationCandidate)
+    .filter((file) => hasRouteDeclaration(file))
+    .map((file) => file.relative);
+
+  return Array.from(new Set([...pathMatches, ...declarationMatches]))
     .sort()
     .slice(0, 80);
+}
+
+function isRoutePathFile(file) {
+  const lower = file.relative.toLowerCase();
+  return lower.includes("/routes/")
+    || lower.includes("/controllers/")
+    || lower.includes("/api/")
+    || /^app\/(?:.*\/)?(page|route)\.[cm]?[jt]sx?$/.test(lower)
+    || /^pages\/.+\.[cm]?[jt]sx?$/.test(lower)
+    || /^src\/routes\/(?:.*\/)?(\+page|\+server)\.(svelte|[jt]s)$/.test(lower)
+    || /^routes\/(api|web|console|channels)\.php$/.test(lower)
+    || /^config\/routes\.rb$/.test(lower)
+    || /(^|\/)route\.[cm]?[jt]s$/.test(lower)
+    || /(^|\/)router\.ex$/.test(lower)
+    || /(^|\/)urls\.py$/.test(lower)
+    || /(^|\/)views\.py$/.test(lower);
+}
+
+function isRouteDeclarationCandidate(file) {
+  if (file.size > MAX_ROUTE_HINT_BYTES) {
+    return false;
+  }
+
+  const lower = file.relative.toLowerCase();
+
+  if (lower.includes("/test/")
+    || lower.includes("/tests/")
+    || lower.includes("/__tests__/")
+    || lower.includes(".test.")
+    || lower.includes(".spec.")) {
+    return false;
+  }
+
+  return /^((src|server|app|api|routes|controllers)\/)?(index|main|server|app|api|router|routes)\.[cm]?[jt]sx?$/.test(lower)
+    || /^((src|server|app|api|routes|controllers)\/)?(main|app|api|server|routes|views)\.py$/.test(lower);
+}
+
+function hasRouteDeclaration(file) {
+  let text;
+
+  try {
+    text = fs.readFileSync(file.absolute, "utf8");
+  } catch {
+    return false;
+  }
+
+  if (/\b(app|router|server)\s*\.\s*(get|post|put|patch|delete|all|use)\s*\(\s*["'`]\//i.test(text)) {
+    return true;
+  }
+
+  if (/\b(app|router)\s*\.\s*route\s*\(\s*["'`]\//i.test(text)) {
+    return true;
+  }
+
+  if (/@(?:app|router|api)\.(get|post|put|patch|delete|api_route|route)\s*\(\s*["']\//i.test(text)) {
+    return true;
+  }
+
+  return /\bapp\.add_api_route\s*\(\s*["']\//i.test(text);
 }
 
 function collectTests(files) {
@@ -716,6 +919,35 @@ function collectEnvFiles(files) {
     .slice(0, 40);
 }
 
+function collectDataFiles(files) {
+  return files
+    .filter((file) => {
+      const lower = file.relative.toLowerCase();
+
+      return lower === "alembic.ini"
+        || lower === "db/schema.rb"
+        || lower === "db/structure.sql"
+        || lower === "prisma/schema.prisma"
+        || lower === "schema.sql"
+        || lower.endsWith("/schema.sql")
+        || lower.startsWith("alembic/versions/")
+        || lower.startsWith("database/factories/")
+        || lower.startsWith("database/migrations/")
+        || lower.startsWith("database/seeders/")
+        || lower.startsWith("db/migrate/")
+        || lower.startsWith("drizzle/")
+        || lower.startsWith("migrations/")
+        || /(^|\/)drizzle\.config\.[cm]?[jt]s$/.test(lower)
+        || /(^|\/)migrations\/[^/]+\.py$/.test(lower)
+        || /(^|\/)migrations\/[^/]+\.sql$/.test(lower)
+        || /(^|\/)migrations\/versions\/[^/]+\.py$/.test(lower)
+        || /(^|\/)models\/.*\.(py|rb|php|js|ts)$/.test(lower);
+    })
+    .map((file) => file.relative)
+    .sort()
+    .slice(0, 80);
+}
+
 function collectCiFiles(files) {
   return files
     .filter((file) => file.relative.startsWith(".github/workflows/") || file.name === "Dockerfile" || file.name === "docker-compose.yml" || file.name === "compose.yml")
@@ -725,7 +957,7 @@ function collectCiFiles(files) {
 }
 
 function collectConfigFiles(files) {
-  const configPattern = /(^|\/)(eslint\.config|prettier\.config|vite\.config|next\.config|nuxt\.config|tailwind\.config|tsconfig|jsconfig|vitest\.config|jest\.config|playwright\.config|cypress\.config|drizzle\.config|prisma\/schema|turbo\.json|biome\.json|ruff\.toml|mypy\.ini|pytest\.ini)/i;
+  const configPattern = /(^|\/)(angular\.json|astro\.config|biome\.json|cypress\.config|drizzle\.config|eslint\.config|go\.work|jest\.config|jsconfig|melos\.yaml|mypy\.ini|next\.config|nuxt\.config|nx\.json|playwright\.config|pnpm-workspace\.yaml|prettier\.config|prisma\/schema|pytest\.ini|remix\.config|ruff\.toml|svelte\.config|tailwind\.config|tsconfig|turbo\.json|vite\.config)/i;
 
   return files
     .filter((file) => configPattern.test(file.relative))
@@ -797,6 +1029,16 @@ function appendList(lines, label, items) {
   lines.push(`- ${label}: ${items.map((item) => `\`${item}\``).join(", ")}`);
 }
 
+function appendSignals(lines, label, items) {
+  if (!items || items.length === 0) {
+    lines.push(`- ${label}: none detected`);
+    return;
+  }
+
+  const formatted = items.map((item) => `\`${item.name}\` (${item.evidence})`);
+  lines.push(`- ${label}: ${formatted.join(", ")}`);
+}
+
 function formatLanguageSummary(languages) {
   if (!languages || languages.length === 0) {
     return "not detected";
@@ -825,6 +1067,102 @@ function readJsonIfPresent(filePath) {
   }
 }
 
+function readManifestTexts(byPath) {
+  const manifestNames = [
+    "requirements.txt",
+    "pyproject.toml",
+    "Gemfile",
+    "go.mod",
+    "Cargo.toml",
+    "mix.exs",
+    "pubspec.yaml"
+  ];
+  const texts = new Map();
+
+  for (const name of manifestNames) {
+    const filePath = byPath.get(name)?.absolute;
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      continue;
+    }
+
+    const stat = fs.statSync(filePath);
+    if (stat.size > MAX_TEXT_BYTES) {
+      continue;
+    }
+
+    try {
+      texts.set(name, fs.readFileSync(filePath, "utf8"));
+    } catch {
+      continue;
+    }
+  }
+
+  return texts;
+}
+
+function collectDependencyNames(manifest, fields) {
+  const names = new Set();
+
+  for (const field of fields) {
+    const dependencies = manifest?.[field];
+
+    if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) {
+      continue;
+    }
+
+    for (const name of Object.keys(dependencies)) {
+      names.add(name);
+    }
+  }
+
+  return names;
+}
+
+function addDependencySignal(signals, names, dependency, framework, evidencePrefix = "package.json dependency") {
+  if (!names.has(dependency)) {
+    return;
+  }
+
+  signals.push({ name: framework, evidence: `${evidencePrefix}: ${dependency}` });
+}
+
+function addManifestTextSignal(signals, manifestTexts, manifestNames, pattern, framework) {
+  for (const manifestName of manifestNames) {
+    const text = manifestTexts.get(manifestName);
+
+    if (text && pattern.test(text)) {
+      signals.push({ name: framework, evidence: `${manifestName} signal` });
+      return;
+    }
+  }
+}
+
+function addPathSignal(signals, files, framework, predicate) {
+  const match = files.find(predicate);
+
+  if (match) {
+    signals.push({ name: framework, evidence: `path: ${match.relative}` });
+  }
+}
+
+function uniqueSignals(signals) {
+  return uniqueBy(signals, (signal) => signal.name);
+}
+
+function formatWorkspaceGlobs(workspaces) {
+  const globs = Array.isArray(workspaces) ? workspaces : workspaces?.packages;
+
+  if (!Array.isArray(globs)) {
+    return "";
+  }
+
+  return globs
+    .filter((item) => typeof item === "string")
+    .slice(0, 4)
+    .join(", ");
+}
+
 function requireValue(argv, index, flag) {
   const value = argv[index + 1];
   if (!value || value.startsWith("-")) {
@@ -841,6 +1179,41 @@ function parsePositiveInt(value, flag) {
   }
 
   return parsed;
+}
+
+function parseTarget(value, flag) {
+  const target = value.toLowerCase();
+
+  if (!TARGET_OUTPUTS.has(target)) {
+    throw new Error(`${flag} must be one of: ${Array.from(TARGET_OUTPUTS.keys()).join(", ")}`);
+  }
+
+  return target;
+}
+
+function collectGeneratedOutputFiles(root, output) {
+  const generatedFiles = new Set([DEFAULT_OUTPUT.toLowerCase()]);
+
+  if (!output) {
+    return generatedFiles;
+  }
+
+  const outputPath = path.resolve(root, output);
+  const relative = path.relative(root, outputPath);
+
+  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+    generatedFiles.add(toPosix(relative).toLowerCase());
+  }
+
+  return generatedFiles;
+}
+
+function formatUpdateCommand(options) {
+  if (options.target) {
+    return `agent-rake --target ${options.target}`;
+  }
+
+  return `agent-rake --out ${options.output}`;
 }
 
 function readPackageVersion() {
@@ -860,6 +1233,7 @@ Usage:
 Options:
   --root <path>       Repository root. Defaults to the current directory.
   --out <file>        Output file. Defaults to AGENT_BRIEF.md.
+  --target <name>     Output to a known agent file: agents, claude, codex, copilot, cursor.
   --no-write          Print Markdown to stdout instead of writing a file.
   --print             Alias for --no-write.
   --json              Print the scan result as JSON.
